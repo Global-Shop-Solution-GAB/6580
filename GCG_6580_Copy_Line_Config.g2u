@@ -1,0 +1,109 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+V.Local.sOrder.Declare(String,"")
+V.Local.sSql.Declare(String,"")
+V.Local.sRet.Declare(String,"")
+V.Local.sOrgLine.Declare(String,"")
+V.Local.sValue.Declare(String,"")
+V.Local.iCount.Declare(Long,0)
+V.Local.sFile.Declare(String,"")
+V.Local.bRet.Declare(Boolean,False)
+V.Local.sTemp.Declare(String,"")
+
+F.Intrinsic.Control.SelectCase(V.Caller.Hook)
+	F.Intrinsic.Control.Case("12230")
+		F.Intrinsic.Control.If(V.Caller.LocalGSSTempDir.Right1,=,"\")
+			F.Intrinsic.String.Build("{0}{1}{2}.txt",V.Caller.LocalGSSTempDir,V.Caller.User,V.Passed.000060,V.Local.sFile)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("{0}\{1}{2}.txt",V.Caller.LocalGSSTempDir,V.Caller.User,V.Passed.000060,V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.String.LPad(V.Passed.000060,"0",7,V.Local.sOrder)
+		F.ODBC.Connection!Con.OpenCompanyConnection
+		F.Intrinsic.String.Build("Select Record_No From V_Order_Lines where Order_No = '{0}' Order by Record_NO",V.Local.sOrder,V.Local.sSql)
+		F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+		F.Intrinsic.String.Replace(V.Local.sRet,"#$#","','",V.Local.sRet)
+		F.Intrinsic.String.Build("{0}@!@{1}",V.Local.sRet,V.Passed.000051,V.Local.sRet)
+		
+		F.Intrinsic.File.String2File(V.Local.sFile,V.Local.sRet)
+		
+		F.ODBC.Connection!con.Close
+		
+		F.Intrinsic.Control.CallSub(Exit)
+		
+	F.Intrinsic.Control.Case("12231")
+		F.Intrinsic.Control.If(V.Caller.LocalGSSTempDir.Right1,=,"\")
+			F.Intrinsic.String.Build("{0}{1}{2}.txt",V.Caller.LocalGSSTempDir,V.Caller.User,V.Passed.000060,V.Local.sFile)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.String.Build("{0}\{1}{2}.txt",V.Caller.LocalGSSTempDir,V.Caller.User,V.Passed.000060,V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bRet)
+		F.Intrinsic.Control.If(V.Local.bRet)
+			F.Intrinsic.File.File2String(V.Local.sFile,V.Local.sValue)
+			F.Intrinsic.String.Split(V.Local.sValue.Trim,"@!@",V.Local.sValue)
+			F.Intrinsic.Control.If(V.Local.sValue.UBound,=,1)
+				F.Intrinsic.String.LPad(V.Passed.000060,"0",7,V.Local.sOrder)
+				F.Intrinsic.String.LPad(V.Local.sValue(1),"0",3,V.Local.sOrgLine)
+				F.Intrinsic.String.Build("{0}0",V.Local.sOrgLine,V.Local.sOrgLine)
+				F.ODBC.Connection!Con.OpenCompanyConnection
+				F.Intrinsic.String.Build("Select * From Order_Config Where Order_No = '{0}' and Order_Line = '{1}'",V.Local.sOrder,V.Local.sOrgLine,V.Local.sSql)
+				F.Data.DataTable.CreateFromSQL("OrderConfig","con",V.Local.sSql,True)
+				F.Intrinsic.Control.If(V.DataTable.OrderConfig.RowCount--,<>,-1)
+					F.Intrinsic.String.Build("Select Record_No From V_Order_Lines where Order_No = '{0}' and Record_No Not In('{1}') Order by Record_NO",V.Local.sOrder,V.Local.sValue(0),V.Local.sSql)
+					F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSql,V.Local.sRet)
+					F.Intrinsic.String.Split(V.Local.sRet,"#$#",V.Local.sRet)
+					F.Intrinsic.Control.For(V.Local.iCount,0,V.Local.sRet.UBound,1)
+						F.Intrinsic.Control.If(V.Local.sRet(V.Local.iCount).Trim,<>,"")
+							F.Intrinsic.String.Build("Select Top 1 Order_Line From Order_Config Where Order_No = '{0}' and Order_Line = '{1}'",V.Local.sOrder,V.Local.sRet(V.Local.iCount),V.Local.sSql)
+							F.ODBC.Connection!Con.ExecuteAndReturn(V.Local.sSql,V.Local.sTemp)
+							F.Intrinsic.Control.If(V.Local.sTemp.Trim,=,"")
+								F.Data.DataTable.SetValue("OrderConfig",-1,"Order_Line",V.Local.sRet(V.Local.iCount))
+								F.Data.DataTable.AcceptChanges("OrderConfig")
+								F.Data.DataTable.SaveToDB("OrderConfig","con","Order_Config","",128)
+							F.Intrinsic.Control.EndIf
+						F.Intrinsic.Control.EndIf
+					F.Intrinsic.Control.Next(V.Local.iCount)
+				F.Intrinsic.Control.EndIf
+				F.Data.DataTable.Close("OrderConfig")
+				F.ODBC.Connection!con.Close
+			F.Intrinsic.Control.EndIf
+			F.Intrinsic.File.DeleteFile(V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		
+		F.Intrinsic.Control.CallSub(Exit)
+		
+	F.Intrinsic.Control.CaseElse
+		F.Intrinsic.Control.CallSub(Exit)
+		
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.String.Build("Project: GCG_6580_Copy_Line_Config.g2u {0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}",V.Ambient.NewLine,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+	F.Intrinsic.Control.CallSub(Exit)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.Exit.Start
+F.Intrinsic.Control.SetErrorHandler("Exit_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String,"")
+
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Exit_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	F.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Exit.End
